@@ -1,9 +1,9 @@
 use crate::U256;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha256::digest;
 use std::fmt;
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Hash(U256);
 
 impl Hash {
@@ -27,5 +27,3 @@ impl fmt::Display for Hash {
         write!(f, "{:?}", self.0)
     }
 }
-
-pub struct MerkleRoot;
