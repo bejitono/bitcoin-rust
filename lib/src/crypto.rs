@@ -1,5 +1,8 @@
 use crate::sha256::Hash;
-use ecdsa::{signature::{SignerMut, Verifier}, Signature as ECDSASignature, SigningKey, VerifyingKey};
+use ecdsa::{
+    signature::{SignerMut, Verifier},
+    Signature as ECDSASignature, SigningKey, VerifyingKey,
+};
 use k256::Secp256k1;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +18,10 @@ impl Signature {
     }
 
     pub fn verify(&self, output_hash: &Hash, public_key: &PublicKey) -> bool {
-        public_key.0.verify(&output_hash.as_bytes(), &self.0).is_ok()
+        public_key
+            .0
+            .verify(&output_hash.as_bytes(), &self.0)
+            .is_ok()
     }
 }
 

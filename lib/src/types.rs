@@ -1,7 +1,13 @@
-use crate::{crypto::{PublicKey, Signature}, errors::{BtcError, Result}, sha256::Hash, util::MerkleRoot, U256};
-use std::collections::HashMap;
+use crate::{
+    crypto::{PublicKey, Signature},
+    errors::{BtcError, Result},
+    sha256::Hash,
+    util::MerkleRoot,
+    U256,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -21,7 +27,7 @@ impl Blockchain {
     pub fn add_block(&mut self, block: Block) -> Result<()> {
         if self.blocks.is_empty() {
             if block.header.prev_block_hash != Hash::zero() {
-                return Err(BtcError::InvalidBlock)
+                return Err(BtcError::InvalidBlock);
             }
         } else {
             let last_block = self.blocks.last().unwrap();
@@ -41,7 +47,7 @@ impl Blockchain {
             if block.header.timestamp <= last_block.header.timestamp {
                 return Err(BtcError::InvalidBlock);
             }
-            
+
             block.verify_transactions(&self.utxos)?;
         }
 
@@ -96,7 +102,7 @@ impl Block {
 
             for input in &transaction.inputs {
                 let prev_output = utxos.get(&input.prev_transaction_output_hash);
-                
+
                 if prev_output.is_none() {
                     return Err(BtcError::InvalidTransaction);
                 }
@@ -108,8 +114,11 @@ impl Block {
                     return Err(BtcError::InvalidTransaction);
                 }
 
-                if !input.signature.verify(&input.prev_transaction_output_hash, &prev_output.pubkey) {
-                    return Err(BtcError::InvalidSignature)
+                if !input
+                    .signature
+                    .verify(&input.prev_transaction_output_hash, &prev_output.pubkey)
+                {
+                    return Err(BtcError::InvalidSignature);
                 }
 
                 input_value += prev_output.value;

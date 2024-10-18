@@ -8,11 +8,11 @@ pub struct MerkleRoot(Hash);
 impl MerkleRoot {
     pub fn calculate(transactions: &[Transaction]) -> MerkleRoot {
         let mut layer: Vec<Hash> = vec![];
-    
+
         for transaction in transactions {
             layer.push(Hash::hash(transaction));
         }
-   
+
         while layer.len() > 1 {
             let mut new_layer = vec![];
             for pair in layer.chunks(2) {
