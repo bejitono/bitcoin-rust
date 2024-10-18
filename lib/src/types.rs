@@ -1,8 +1,6 @@
+use crate::{crypto::{PublicKey, Signature}, errors::{BtcError, Result}, sha256::Hash, util::MerkleRoot, U256};
 use std::collections::HashMap;
-
-use crate::{crypto::Signature, errors::{BtcError, Result}, sha256::Hash, util::MerkleRoot, U256};
 use chrono::{DateTime, Utc};
-use k256::PublicKey;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -86,6 +84,47 @@ impl Block {
     }
 
     pub fn verify_transactions(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+        let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+
+        if self.transactions.is_empty() {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        for transaction in &self.transactions {
+            let mut input_value = 0;
+            let mut output_value = 0;
+
+            for input in &transaction.inputs {
+                let prev_output = utxos.get(&input.prev_transaction_output_hash);
+                
+                if prev_output.is_none() {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                let prev_output = prev_output.unwrap();
+
+                // Prevent same-block double spending
+                if inputs.contains_key(&input.prev_transaction_output_hash) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                if !input.signature.verify(&input.prev_transaction_output_hash, &prev_output.pubkey) {
+                    return Err(BtcError::InvalidSignature)
+                }
+
+                input_value += prev_output.value;
+                inputs.insert(input.prev_transaction_output_hash, prev_output.clone());
+            }
+
+            for output in &transaction.outputs {
+                output_value += output.value;
+            }
+
+            if input_value < output_value {
+                return Err(BtcError::InvalidTransaction);
+            }
+        }
+
         Ok(())
     }
 }
