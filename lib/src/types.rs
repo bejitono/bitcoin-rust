@@ -1,4 +1,6 @@
-use crate::{crypto::Signature, sha256::Hash, util::MerkleRoot, U256};
+use std::collections::HashMap;
+
+use crate::{crypto::Signature, errors::{BtcError, Result}, sha256::Hash, util::MerkleRoot, U256};
 use chrono::{DateTime, Utc};
 use k256::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -6,16 +8,62 @@ use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Blockchain {
+    pub utxos: HashMap<Hash, TransactionOutput>,
     pub blocks: Vec<Block>,
 }
 
 impl Blockchain {
     pub fn new() -> Self {
-        Blockchain { blocks: vec![] }
+        Blockchain {
+            utxos: HashMap::new(),
+            blocks: vec![],
+        }
     }
 
-    pub fn add_block(&mut self, block: Block) {
+    pub fn add_block(&mut self, block: Block) -> Result<()> {
+        if self.blocks.is_empty() {
+            if block.header.prev_block_hash != Hash::zero() {
+                return Err(BtcError::InvalidBlock)
+            }
+        } else {
+            let last_block = self.blocks.last().unwrap();
+            if block.header.prev_block_hash != last_block.hash() {
+                return Err(BtcError::InvalidBlock);
+            }
+
+            if !block.header.hash().matches_target(block.header.target) {
+                return Err(BtcError::InvalidBlock);
+            }
+
+            let calculated_merkle_root = MerkleRoot::calculate(&block.transactions);
+            if calculated_merkle_root != block.header.merkle_root {
+                return Err(BtcError::InvalidMerkleRoot);
+            }
+
+            if block.header.timestamp <= last_block.header.timestamp {
+                return Err(BtcError::InvalidBlock);
+            }
+            
+            block.verify_transactions(&self.utxos)?;
+        }
+
         self.blocks.push(block);
+
+        Ok(())
+    }
+
+    pub fn rebuild_utxos(&mut self) {
+        for block in &self.blocks {
+            for transaction in &block.transactions {
+                for input in &transaction.inputs {
+                    self.utxos.remove(&input.prev_transaction_output_hash);
+                }
+
+                for output in transaction.outputs.iter() {
+                    self.utxos.insert(transaction.hash(), output.clone());
+                }
+            }
+        }
     }
 }
 
@@ -35,6 +83,10 @@ impl Block {
 
     pub fn hash(&self) -> Hash {
         Hash::hash(self)
+    }
+
+    pub fn verify_transactions(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+        Ok(())
     }
 }
 
