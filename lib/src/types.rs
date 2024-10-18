@@ -48,7 +48,7 @@ impl Blockchain {
                 return Err(BtcError::InvalidBlock);
             }
 
-            block.verify_transactions(&self.utxos)?;
+            block.verify_transactions(self.block_height(), &self.utxos)?;
         }
 
         self.blocks.push(block);
@@ -68,6 +68,10 @@ impl Blockchain {
                 }
             }
         }
+    }
+
+    pub fn block_height(&self) -> u64 {
+        self.blocks.len() as u64
     }
 }
 
@@ -89,14 +93,16 @@ impl Block {
         Hash::hash(self)
     }
 
-    pub fn verify_transactions(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+    pub fn verify_transactions(&self, predicted_block_height: u64, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
         let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
 
         if self.transactions.is_empty() {
             return Err(BtcError::InvalidTransaction);
         }
 
-        for transaction in &self.transactions {
+        self.verify_coinbase_transaction(predicted_block_height, utxos)?;
+
+        for transaction in self.transactions.iter().skip(1) {
             let mut input_value = 0;
             let mut output_value = 0;
 
@@ -135,6 +141,31 @@ impl Block {
         }
 
         Ok(())
+    }
+
+    pub fn verify_coinbase_transaction(&self, predicted_block_height: u64, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+        let coinbase_transaction = &self.transactions[0];
+        if coinbase_transaction.inputs.len() != 0 {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        let miner_fees = self.calculate_miner_fees(utxos)?;
+        let block_reward = crate::INITIAL_REWARD * 10u64.pow(8) / 2u64.pow((predicted_block_height / crate::HAVLING_INTERVAL) as u32);
+        let total_coinbase_outputs: u64 = coinbase_transaction
+            .outputs
+            .iter()
+            .map(|output| output.value)
+            .sum();
+
+        if total_coinbase_outputs != block_reward + miner_fees {
+            return Err(BtcError::InvalidTransaction);
+        }
+
+        Ok(())
+    }
+
+    pub fn calculate_miner_fees(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<u64> {
+        Ok(0)
     }
 }
 
