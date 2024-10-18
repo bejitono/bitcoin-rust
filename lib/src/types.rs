@@ -93,7 +93,11 @@ impl Block {
         Hash::hash(self)
     }
 
-    pub fn verify_transactions(&self, predicted_block_height: u64, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+    pub fn verify_transactions(
+        &self,
+        predicted_block_height: u64,
+        utxos: &HashMap<Hash, TransactionOutput>,
+    ) -> Result<()> {
         let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
 
         if self.transactions.is_empty() {
@@ -143,14 +147,19 @@ impl Block {
         Ok(())
     }
 
-    pub fn verify_coinbase_transaction(&self, predicted_block_height: u64, utxos: &HashMap<Hash, TransactionOutput>) -> Result<()> {
+    pub fn verify_coinbase_transaction(
+        &self,
+        predicted_block_height: u64,
+        utxos: &HashMap<Hash, TransactionOutput>,
+    ) -> Result<()> {
         let coinbase_transaction = &self.transactions[0];
         if coinbase_transaction.inputs.len() != 0 {
             return Err(BtcError::InvalidTransaction);
         }
 
         let miner_fees = self.calculate_miner_fees(utxos)?;
-        let block_reward = crate::INITIAL_REWARD * 10u64.pow(8) / 2u64.pow((predicted_block_height / crate::HAVLING_INTERVAL) as u32);
+        let block_reward = crate::INITIAL_REWARD * 10u64.pow(8)
+            / 2u64.pow((predicted_block_height / crate::HAVLING_INTERVAL) as u32);
         let total_coinbase_outputs: u64 = coinbase_transaction
             .outputs
             .iter()
@@ -165,7 +174,40 @@ impl Block {
     }
 
     pub fn calculate_miner_fees(&self, utxos: &HashMap<Hash, TransactionOutput>) -> Result<u64> {
-        Ok(0)
+        let mut inputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+        let mut outputs: HashMap<Hash, TransactionOutput> = HashMap::new();
+
+        // Check every tx after coinbase
+        for transaction in self.transactions.iter().skip(1) {
+            for input in &transaction.inputs {
+                // match inputs to outputs
+                let prev_output = utxos.get(&input.prev_transaction_output_hash);
+                if prev_output.is_none() {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                let prev_output = prev_output.unwrap();
+                if inputs.contains_key(&input.prev_transaction_output_hash) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                inputs.insert(input.prev_transaction_output_hash, prev_output.clone());
+            }
+
+            for output in &transaction.outputs {
+                if outputs.contains_key(&output.hash()) {
+                    return Err(BtcError::InvalidTransaction);
+                }
+
+                outputs.insert(output.hash(), output.clone());
+            }
+        }
+
+        let input_value: u64 = inputs.values().map(|output| output.value).sum();
+
+        let output_value: u64 = outputs.values().map(|output| output.value).sum();
+
+        Ok(input_value - output_value)
     }
 }
 
