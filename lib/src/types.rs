@@ -7,20 +7,25 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Blockchain {
     pub utxos: HashMap<Hash, TransactionOutput>,
+    pub target: U256,
     pub blocks: Vec<Block>,
+    #[serde(default, skip_serializing)]
+    mempool: Vec<Transaction>,
 }
 
 impl Blockchain {
     pub fn new() -> Self {
         Blockchain {
             utxos: HashMap::new(),
+            target: crate::MIN_TARGET,
             blocks: vec![],
+            mempool: vec![],
         }
     }
 
@@ -51,7 +56,19 @@ impl Blockchain {
             block.verify_transactions(self.block_height(), &self.utxos)?;
         }
 
+        // Remove txs from mempool that are now in the block.
+        let block_transactions: HashSet<_> = block
+            .transactions
+            .iter()
+            .map(|tx| tx.hash())
+            .collect();
+        
+        self.mempool.retain(|tx| {
+            !block_transactions.contains(&tx.hash())
+        });
+
         self.blocks.push(block);
+        self.try_adjust_target();
 
         Ok(())
     }
@@ -68,6 +85,10 @@ impl Blockchain {
                 }
             }
         }
+    }
+
+    pub fn try_adjust_target(&mut self) {
+
     }
 
     pub fn block_height(&self) -> u64 {
